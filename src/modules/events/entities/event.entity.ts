@@ -38,13 +38,6 @@ export class Event extends CustomBaseEntity {
   @Min(1)
   max_attendees: number;
 
-  @Column({
-    type: 'varchar',
-    length: 100,
-    nullable: false,
-  })
-  createdById: string;
-
   @OneToMany(() => Registration, (registration) => registration.event, {
     cascade: true,
   })

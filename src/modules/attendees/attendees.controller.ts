@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { AttendeesService } from './attendees.service';
 import { CreateAttendeeDto } from './dto/create-attendee.dto';
@@ -15,25 +16,20 @@ import { UpdateAttendeeDto } from './dto/update-attendee.dto';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { VerifiedUserGuard } from 'src/common/guards/verified-user.guard';
-import { RequiredVerifications } from 'src/common/decorators/verifications.decorator';
-import { RequiredVerificationsEnum } from '../auth/data/required-verifications.enum';
+import { Attendee } from './entities/attendee.entity';
 
-@ApiTags('🔒 Attendee API')
-@UseGuards(ThrottlerGuard)
+@ApiTags('🌏 Attendee API')
 @Controller('attendees')
+@UseGuards(ThrottlerGuard)
 export class AttendeesController {
   constructor(private readonly attendeesService: AttendeesService) {}
 
   @Post()
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
-  @RequiredVerifications(RequiredVerificationsEnum.EMAIL)
   @ApiOperation({ summary: 'Creating a Attendee' })
   @ApiResponse({ description: 'Bad Request', status: HttpStatus.BAD_REQUEST })
   @ApiResponse({
@@ -41,33 +37,107 @@ export class AttendeesController {
     status: HttpStatus.INTERNAL_SERVER_ERROR,
   })
   @ApiResponse({
-    description: 'Lab added successfully',
+    description: 'Attendee created successfully',
     status: HttpStatus.CREATED,
   })
-  create(@Body() createAttendeeDto: CreateAttendeeDto) {
-    return this.attendeesService.create(createAttendeeDto);
+  async create(@Body() createAttendeeDto: CreateAttendeeDto) {
+    return {
+      statusCode: HttpStatus.CREATED,
+      message: 'Attendee created successfully',
+      result: await this.attendeesService.create(createAttendeeDto),
+    };
   }
 
   @Get()
-  findAll() {
-    return this.attendeesService.findAll();
+  @ApiOperation({ summary: 'Getting all Attendee' })
+  @ApiResponse({ description: 'Bad Request', status: HttpStatus.BAD_REQUEST })
+  @ApiResponse({
+    description: 'Something went wrong',
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+  })
+  @ApiResponse({
+    description: 'Data retrieved successfully',
+    status: HttpStatus.OK,
+  })
+  @ApiQuery({ name: 'search', required: false })
+  async findAll(@Query('search') search?: string) {
+    if (search) {
+      return {
+        statusCode: HttpStatus.OK,
+        message: 'Data retrieved successfully',
+        result: await this.attendeesService.searchAttendees(search),
+      };
+    }
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Data retrieved successfully',
+      result: await this.attendeesService.findAll(),
+    };
+  }
+
+  @Get('multiple-registrations')
+  @ApiOperation({
+    summary: 'Getting all Attendees who have registered for multiple events',
+  })
+  @ApiResponse({ description: 'Bad Request', status: HttpStatus.BAD_REQUEST })
+  @ApiResponse({
+    description: 'Something went wrong',
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+  })
+  @ApiResponse({
+    description: 'Data retrieved successfully',
+    status: HttpStatus.OK,
+  })
+  async getAttendeesWithMultipleRegistrations() {
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Data retrieved successfully',
+      result:
+        await this.attendeesService.getAttendeesWithMultipleRegistrations(),
+    };
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.attendeesService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateAttendeeDto: UpdateAttendeeDto,
-  ) {
-    return this.attendeesService.update(+id, updateAttendeeDto);
+  @ApiOperation({ summary: 'Getting an Attendee' })
+  @ApiResponse({
+    description: 'Attendee Not Found',
+    status: HttpStatus.NOT_FOUND,
+  })
+  @ApiResponse({
+    description: 'Something went wrong',
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+  })
+  @ApiResponse({
+    description: 'Data Found',
+    status: HttpStatus.OK,
+  })
+  async findOne(@Param('id') id: string) {
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Data Found',
+      result: await this.attendeesService.findOne(id),
+    };
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.attendeesService.remove(+id);
+  @ApiOperation({ summary: 'Deleting an Attendee' })
+  @ApiResponse({
+    description: 'Attendee Not Found',
+    status: HttpStatus.NOT_FOUND,
+  })
+  @ApiResponse({
+    description: 'Something went wrong',
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+  })
+  @ApiResponse({
+    description: 'Data Found',
+    status: HttpStatus.OK,
+  })
+  async delete(@Param('id') id: string) {
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Data Found',
+      result: await this.attendeesService.delete(id),
+    };
   }
 }

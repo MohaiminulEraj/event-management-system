@@ -5,7 +5,6 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmAsyncConfig } from './config/typeorm.config';
-import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
 import { AttendeesModule } from './modules/attendees/attendees.module';
 import { RegistrationsModule } from './modules/registrations/registrations.module';
@@ -28,7 +27,6 @@ import { RegistrationsModule } from './modules/registrations/registrations.modul
       }),
     }),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
-    AuthModule,
     EventsModule,
     AttendeesModule,
     RegistrationsModule,
