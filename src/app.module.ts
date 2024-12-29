@@ -8,6 +8,7 @@ import { typeOrmAsyncConfig } from './config/typeorm.config';
 import { EventsModule } from './modules/events/events.module';
 import { AttendeesModule } from './modules/attendees/attendees.module';
 import { RegistrationsModule } from './modules/registrations/registrations.module';
+import { RedisCacheModule } from './config/cache/cache.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { RegistrationsModule } from './modules/registrations/registrations.modul
       }),
     }),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
+    RedisCacheModule,
     EventsModule,
     AttendeesModule,
     RegistrationsModule,

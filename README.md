@@ -16,7 +16,7 @@ A NestJS-based API for managing events, attendees, and registrations.
 - [x] Event Management (CRUD operations)
 - [x] Attendee Management
 - [x] Registration System
-- [ ] Caching System
+- [x] Caching System
 - [ ] Email Notifications
 - [ ] Real-time Updates
 

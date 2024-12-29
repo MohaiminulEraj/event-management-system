@@ -3,27 +3,24 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
   HttpException,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  Between,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  ILike,
-} from 'typeorm';
+import { Repository, Between, ILike } from 'typeorm';
 import { Event } from './entities/event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectRepository(Event)
     private readonly eventsRepository: Repository<Event>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async create(createEventDto: CreateEventDto): Promise<Event> {
@@ -44,17 +41,17 @@ export class EventsService {
     await this.checkEventOverlap(eventDate);
 
     const event = this.eventsRepository.create(createEventDto);
-    return this.eventsRepository.save(event);
+    const savedEvent = await this.eventsRepository.save(event);
+    await this.invalidateCache();
+    return savedEvent;
   }
 
   // NOTE: Since the end of the event is not specified, the event is considered to be 1 hour long. and 20 minutes before the event starts, the event is considered to be started.
   private async checkEventOverlap(eventDate: Date): Promise<void> {
-    const startWindow = new Date(eventDate.getTime() - 20 * 60 * 1000); // 20 minutes before
-    const endWindow = new Date(eventDate.getTime() + 60 * 60 * 1000); // 1 hour after
-
+    console.log({ eventDate });
     const overlappingEvents = await this.eventsRepository.find({
       where: {
-        date: Between(startWindow, endWindow),
+        date: new Date(eventDate?.toISOString()?.split('T')?.[0]),
       },
     });
 
@@ -66,7 +63,35 @@ export class EventsService {
     }
   }
 
+  private generateCacheKey(id: string): string {
+    return `events:${id}`;
+  }
+
+  private async invalidateCache(id?: string): Promise<void> {
+    if (id) {
+      await this.cacheManager.del(`events:${id}`);
+    } else {
+      await this.cacheManager.del(`events`);
+    }
+  }
+
   async findAll(date?: Date, search?: string): Promise<Event[]> {
+    // const cacheKey = this.generateCacheKey(date, search);
+
+    if (!date && !search) {
+      const cachedEvents = await this.cacheManager.get<Event[]>(`events`);
+      if (cachedEvents) {
+        return cachedEvents;
+      }
+    } else {
+      const cacheKey = `events:filtered:${date ? date?.toISOString()?.split('T')?.[0] : ''}:${search || ''}`;
+
+      const cachedEvents = await this.cacheManager.get<Event[]>(cacheKey);
+      if (cachedEvents) {
+        return cachedEvents;
+      }
+    }
+
     const where: any = {};
     const order: any = { date: 'ASC' };
     if (date) {
@@ -86,13 +111,29 @@ export class EventsService {
       where.name = ILike(`%${search}%`);
     }
 
-    return await this.eventsRepository.find({
+    const events = await this.eventsRepository.find({
       where,
       order,
     });
+
+    events.forEach((event) => {
+      this.cacheManager.set(this.generateCacheKey(event.id), event, {
+        ttl: 3600,
+      } as any);
+    });
+
+    return events;
   }
 
   async findOne(id: string): Promise<Event> {
+    const cacheKey = `events:${id}`;
+
+    // Try to get from cache
+    const cachedEvent = await this.cacheManager.get<Event>(cacheKey);
+    if (cachedEvent) {
+      return cachedEvent;
+    }
+
     const event = await this.eventsRepository.findOne({
       where: { id },
       relations: ['registrations', 'registrations.attendee'],
@@ -101,7 +142,7 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID ${id} not found`);
     }
-
+    await this.cacheManager.set(cacheKey, event, { ttl: 3600 } as any);
     return event;
   }
 
@@ -115,7 +156,11 @@ export class EventsService {
     // If date is being updated, check for overlaps
     if (updateEventDto.date) {
       const newDate = new Date(updateEventDto.date);
-      if (newDate.toString() !== event.date.toString()) {
+      console.log(
+        newDate?.toISOString()?.split('T')?.[0],
+        event.date.toString(),
+      );
+      if (newDate?.toISOString()?.split('T')?.[0] !== event.date.toString()) {
         await this.checkEventOverlap(newDate);
       }
     }
@@ -131,7 +176,9 @@ export class EventsService {
     }
 
     Object.assign(event, updateEventDto);
-    return await this.eventsRepository.save(event);
+    const updatedEvent = await this.eventsRepository.save(event);
+    await this.invalidateCache(id);
+    return updatedEvent;
   }
 
   async getEventWithMostRegistrations(): Promise<any> {
@@ -155,7 +202,7 @@ export class EventsService {
     return result[0];
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<Event> {
     const event = await this.findOne(id);
 
     if (!event) {
@@ -169,6 +216,8 @@ export class EventsService {
       );
     }
 
-    await this.eventsRepository.remove(event);
+    const deletedEvent = await this.eventsRepository.remove(event);
+    await this.invalidateCache(deletedEvent.id);
+    return deletedEvent;
   }
 }

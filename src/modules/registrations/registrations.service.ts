@@ -61,7 +61,6 @@ export class RegistrationsService {
       throw new BadRequestException('Event has reached maximum capacity');
     }
 
-    // Create registration
     const registration = this.registrationRepository.create({
       event,
       attendee,
